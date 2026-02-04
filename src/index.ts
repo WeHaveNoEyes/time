@@ -17,6 +17,7 @@ import { createReadStream, existsSync } from "fs";
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
+const INTERVAL_MINUTES = Math.max(1, parseInt(process.env.ANNOUNCE_INTERVAL_MINUTES || "15", 10)) || 15;
 
 if (!DISCORD_TOKEN || !GUILD_ID || !VOICE_CHANNEL_ID) {
   console.error(
@@ -235,10 +236,10 @@ async function announceTime(): Promise<void> {
   }
 }
 
-/** Milliseconds until the next :00 / :15 / :30 / :45 mark */
-function msUntilNext15Min(): number {
+/** Milliseconds until the next interval-aligned minute mark */
+function msUntilNextInterval(): number {
   const now = new Date();
-  const minutesLeft = 15 - (now.getMinutes() % 15);
+  const minutesLeft = INTERVAL_MINUTES - (now.getMinutes() % INTERVAL_MINUTES);
   return minutesLeft * 60_000 - now.getSeconds() * 1000 - now.getMilliseconds();
 }
 
@@ -254,8 +255,9 @@ client.once("clientReady", () => {
       `outro=${hasOutro ? "enabled" : "no sounds/outro/ dir"}`
   );
   console.log(`Voice styles loaded: ${VOICE_STYLES.length}`);
+  console.log(`Announce interval: every ${INTERVAL_MINUTES} minute${INTERVAL_MINUTES === 1 ? "" : "s"}`);
 
-  const delay = msUntilNext15Min();
+  const delay = msUntilNextInterval();
   const nextAt = new Date(Date.now() + delay);
   console.log(
     `Next announcement at ${nextAt.toLocaleTimeString("en-US", { timeZone: "America/New_York" })} ET ` +
@@ -264,7 +266,7 @@ client.once("clientReady", () => {
 
   setTimeout(() => {
     announceTime();
-    setInterval(announceTime, 15 * 60_000);
+    setInterval(announceTime, INTERVAL_MINUTES * 60_000);
   }, delay);
 });
 
