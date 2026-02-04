@@ -8,7 +8,6 @@ import {
   entersState,
   StreamType,
 } from "@discordjs/voice";
-import googleTTS from "google-tts-api";
 import { Readable } from "stream";
 import { readdir } from "fs/promises";
 import { join } from "path";
@@ -17,11 +16,12 @@ import { createReadStream, existsSync } from "fs";
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const VOICE_CHANNEL_ID = process.env.VOICE_CHANNEL_ID;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const INTERVAL_MINUTES = Math.max(1, parseInt(process.env.ANNOUNCE_INTERVAL_MINUTES || "15", 10)) || 15;
 
-if (!DISCORD_TOKEN || !GUILD_ID || !VOICE_CHANNEL_ID) {
+if (!DISCORD_TOKEN || !GUILD_ID || !VOICE_CHANNEL_ID || !ELEVENLABS_API_KEY) {
   console.error(
-    "Missing required environment variables: DISCORD_TOKEN, GUILD_ID, VOICE_CHANNEL_ID"
+    "Missing required environment variables: DISCORD_TOKEN, GUILD_ID, VOICE_CHANNEL_ID, ELEVENLABS_API_KEY"
   );
   console.error("Copy .env.example to .env and fill in the values.");
   process.exit(1);
@@ -32,27 +32,25 @@ const client = new Client({
 });
 
 // ---------------------------------------------------------------------------
-// Voice styles — Google TTS supports many language codes. Passing English text
-// through a non-English voice gives it a fun accent.
+// Voice styles — ElevenLabs pre-made voice IDs
 // ---------------------------------------------------------------------------
 const VOICE_STYLES = [
-  { lang: "en",    slow: false, label: "Standard" },
-  { lang: "en",    slow: true,  label: "Sloooow" },
-  { lang: "en-gb", slow: false, label: "British" },
-  { lang: "en-au", slow: false, label: "Australian" },
-  { lang: "en-in", slow: false, label: "Indian" },
-  { lang: "en-za", slow: false, label: "South African" },
-  { lang: "fr",    slow: false, label: "French accent" },
-  { lang: "de",    slow: false, label: "German accent" },
-  { lang: "es",    slow: false, label: "Spanish accent" },
-  { lang: "it",    slow: false, label: "Italian accent" },
-  { lang: "ja",    slow: false, label: "Japanese accent" },
-  { lang: "pt",    slow: false, label: "Portuguese accent" },
-  { lang: "ru",    slow: false, label: "Russian accent" },
-  { lang: "ko",    slow: false, label: "Korean accent" },
-  { lang: "hi",    slow: false, label: "Hindi accent" },
-  { lang: "nl",    slow: false, label: "Dutch accent" },
-  { lang: "sv",    slow: false, label: "Swedish accent" },
+  { voiceId: "21m00Tcm4TlvDq8ikWAM", label: "Rachel" },
+  { voiceId: "2EiwWnXFnvU5JabPnv8n", label: "Clyde" },
+  { voiceId: "AZnzlk1XvdvUeBnXmlld", label: "Domi" },
+  { voiceId: "EXAVITQu4vr4xnSDxMaL", label: "Bella" },
+  { voiceId: "ErXwobaYiN019PkySvjV", label: "Antoni" },
+  { voiceId: "IKne3meq5aSn9XLyUdCD", label: "Charlie" },
+  { voiceId: "MF3mGyEYCl7XYWbV9V6O", label: "Elli" },
+  { voiceId: "TxGEqnHWrfWFTfGW9XjX", label: "Josh" },
+  { voiceId: "VR6AewLTigWG4xSOukaG", label: "Arnold" },
+  { voiceId: "XrExE9yKIg1WjnnlVkGX", label: "Matilda" },
+  { voiceId: "pNInz6obpgDQGcFmaJgB", label: "Adam" },
+  { voiceId: "yoZ06aMxZJJ28mfd3POQ", label: "Sam" },
+  { voiceId: "JBFqnCBsd6RMkjVDRZzb", label: "George" },
+  { voiceId: "ThT5KcBeYPX3keUQqHPh", label: "Dorothy" },
+  { voiceId: "SOYHLrjzK2X1ezoPC6cr", label: "Harry" },
+  { voiceId: "XB0fDUnXU5powFXDhCwa", label: "Charlotte" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -210,12 +208,28 @@ async function announceTime(): Promise<void> {
       await playSoundFile(player, introFile);
     }
 
-    // 2) TTS announcement with random voice
-    const base64Audio = await googleTTS.getAudioBase64(announcement, {
-      lang: voice.lang,
-      slow: voice.slow,
-    });
-    const buffer = Buffer.from(base64Audio, "base64");
+    // 2) TTS announcement with random voice via ElevenLabs
+    const ttsResponse = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voice.voiceId}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": ELEVENLABS_API_KEY!,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text: announcement,
+          model_id: "eleven_multilingual_v2",
+        }),
+      }
+    );
+    if (!ttsResponse.ok) {
+      throw new Error(
+        `ElevenLabs API error: ${ttsResponse.status} ${await ttsResponse.text()}`
+      );
+    }
+    const buffer = Buffer.from(await ttsResponse.arrayBuffer());
     const ttsResource = createAudioResource(Readable.from(buffer), {
       inputType: StreamType.Arbitrary,
     });
