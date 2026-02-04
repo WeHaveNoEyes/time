@@ -115,7 +115,7 @@ function msUntilNext15Min(): number {
   return minutesLeft * 60_000 - now.getSeconds() * 1000 - now.getMilliseconds();
 }
 
-client.once("ready", () => {
+client.once("clientReady", () => {
   console.log(`Logged in as ${client.user?.tag}`);
   console.log(`Guild: ${GUILD_ID} | Voice Channel: ${VOICE_CHANNEL_ID}`);
 
